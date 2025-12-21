@@ -36,6 +36,7 @@ class LitResNet(L.LightningModule):
         x, y = batch
         y_hat = self.model(x)
         loss = self.loss(y_hat, y)
+        self.log('train_loss', loss, on_step=False, on_epoch=True, prog_bar=False)
 
         # convert logits to predicted class indices for metrics
         preds = torch.argmax(y_hat, dim=1)
@@ -48,6 +49,9 @@ class LitResNet(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self.model(x)
+        loss = self.loss(y_hat, y)
+        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=False)
+
 
         # convert logits to predicted class indices for metrics
         preds = torch.argmax(y_hat, dim=1)
