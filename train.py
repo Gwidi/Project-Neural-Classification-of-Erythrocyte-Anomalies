@@ -11,14 +11,28 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 
 def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batch_size: int = 32, num_workers: int = 4):   
     # Define transformations
-    transform = transforms.Compose([
+    train_transform = transforms.Compose([
+        transforms.RandomChoice([
+            transforms.RandomRotation((0, 0)),      # 0 degrees
+            transforms.RandomRotation((90, 90)),    # 90 degrees
+            transforms.RandomRotation((180, 180)),  # 180 degrees
+            transforms.RandomRotation((270, 270)),  # 270 degrees
+        ]),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomVerticalFlip(p=0.5),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2),  # Slight brightness and contrast changes
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    val_transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
     # Load the malaria dataset
-    trainval_dataset = MalariaDataset(split='trainval', transform=transform)
+    trainval_dataset = MalariaDataset(split='trainval', transform=None)
 
     # 1. Split train dataset into train validation and test sets
     total_size = len(trainval_dataset)
@@ -26,8 +40,14 @@ def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batc
     val_size = int(0.15 * total_size)
     test_size = total_size - train_size - val_size
 
+    generator = torch.Generator().manual_seed(42)
+
     train_dataset, val_dataset, test_dataset = random_split(
-        trainval_dataset, [train_size, val_size, test_size])
+        trainval_dataset, [train_size, val_size, test_size], generator=generator)
+    
+    train_dataset.dataset.transform = train_transform
+    val_dataset.dataset.transform = val_transform
+    test_dataset.dataset.transform = val_transform
 
     # 2. Create data loaders
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
