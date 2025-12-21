@@ -6,9 +6,9 @@ from LitResNet import LitResNet
 import torchvision.transforms as transforms
 from dataset import MalariaDataset
 from torch.utils.data import DataLoader, random_split
-from lightning.pytorch.loggers import MLFlowLogger
+from lightning.pytorch.loggers import WandbLogger
 
-def get_dataloaders(root='../data/malaria_dataset/', batch_size: int = 32, num_workers: int = 4):   
+def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batch_size: int = 32, num_workers: int = 4):   
     # Define transformations
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
@@ -46,16 +46,22 @@ def main():
         param.requires_grad = False
     num_classes = 2
     num_ftrs = resnet18.fc.in_features
-    resnet18.fc = nn.Linear(num_ftrs, num_classes)
+    resnet18.fc = nn.Sequential(
+    nn.Linear(num_ftrs, 128),      # Step 1: reduce features to 128
+    nn.ReLU(),                     # Step 2: Activation function (adds non-linearity)
+    nn.Dropout(0.5),               # Step 3: Randomly drop 50% of neurons (prevents overfitting)
+    nn.Linear(128, num_classes)    # Step 4: Final output - 1 number (will decide 0 or 1)
+)
+
 
     # Initialize the model and trainer
-    model = LitResNet(resnet18, num_classes=2)
+    model = LitResNet(resnet18)
 
     # Exercise 2 Train the model and verify its performance on the test set.
-    experiment_name = "resnet18_finetune_malaria_dataset"
+    experiment_name = "resnet18_transfer_learning"
     run_name = "basic_finetuning"
-    mlf_logger = MLFlowLogger(experiment_name=experiment_name, run_name=run_name, tracking_uri="file:./mlruns")
-    trainer = L.Trainer(max_epochs=10, accelerator='gpu', logger=mlf_logger)
+    wandb_logger = WandbLogger(project=experiment_name, name=run_name)
+    trainer = L.Trainer(max_epochs=10, accelerator='gpu', logger=wandb_logger)
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
     trainer.test(model, test_loader)
 
