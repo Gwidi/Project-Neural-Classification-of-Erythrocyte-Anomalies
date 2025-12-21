@@ -10,7 +10,7 @@ import torchmetrics
 from torchmetrics import MetricCollection
 
 class LitResNet(L.LightningModule):
-    def __init__(self, model, num_classes: int, learning_rate: float = 1e-3):
+    def __init__(self, model, learning_rate: float = 1e-3):
         super().__init__()
         self.save_hyperparameters(ignore=['model'])
         

@@ -7,6 +7,7 @@ import torchvision.transforms as transforms
 from dataset import MalariaDataset
 from torch.utils.data import DataLoader, random_split
 from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.callbacks import ModelCheckpoint
 
 def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batch_size: int = 32, num_workers: int = 4):   
     # Define transformations
@@ -61,7 +62,15 @@ def main():
     experiment_name = "resnet18_transfer_learning"
     run_name = "basic_finetuning"
     wandb_logger = WandbLogger(project=experiment_name, name=run_name)
-    trainer = L.Trainer(max_epochs=10, accelerator='gpu', logger=wandb_logger)
+    # Setup checkpoint callback
+    checkpoint_callback = ModelCheckpoint(
+        monitor='val_loss',           # Metric
+        dirpath='models/',     
+        filename='best-model-{epoch:02d}-{val_loss:.2f}',
+        save_top_k=1,                 # Save only the best model
+        mode='min'                    # 'min' (loss), 'max' (accuracy)
+    )
+    trainer = L.Trainer(max_epochs=10, accelerator='gpu', logger=wandb_logger, callbacks=[checkpoint_callback])
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
     trainer.test(model, test_loader)
 
