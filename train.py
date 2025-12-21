@@ -88,11 +88,15 @@ def main():
         dirpath='models/',     
         filename='best-model-{epoch:02d}-{val_loss:.2f}',
         save_top_k=1,                 # Save only the best model
-        mode='min'                    # 'min' (loss), 'max' (accuracy)
+        mode='min',                   # 'min' (loss), 'max' (accuracy)
     )
     trainer = L.Trainer(max_epochs=10, accelerator='gpu', logger=wandb_logger, callbacks=[checkpoint_callback])
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
     trainer.test(model, test_loader)
+    best_model_path = checkpoint_callback.best_model_path
+    best_model = LitResNet.load_from_checkpoint(best_model_path, model=resnet18)
+    # Save the entire model
+    torch.save(best_model.model, 'models/best.pt')
 
 if __name__ == "__main__":
     main()
