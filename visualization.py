@@ -25,14 +25,14 @@ def visualize_model_prediction():
 
     data = MalariaDataset(split='trainval', 
         transform=transforms.Compose([
-        AutoCrop(threshold=5),
-        transforms.Resize((224, 224)),
+        transforms.Resize((256, 256)),
+        transforms.CenterCrop((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]))
 
 
-    image, label = data[0]  # Get the first image and its label
+    image, label = data[5]  # Get the first image and its label
     input = image.unsqueeze(0).to(device) # Add batch dimension
     labels = ['negative', 'positive']
     prediction = model(input).squeeze(0).softmax(0)
@@ -51,17 +51,19 @@ def visualize_model_prediction():
                                                   (0.25, '#000000'),
                                                   (1, '#000000')], N=256)
 
-    # positive values point to pixels that increase the prediction score, negative attributions point to pixels that decrease the score
-    # absolute attribution value show the magnitude of the effect regardless of direction
 
     # Add noise tunnel for smoother attributions
     noise_tunnel = NoiseTunnel(integrated_gradients)
-    attributions_ig_nt = noise_tunnel.attribute(input, nt_samples=3, nt_type='smoothgrad_sq', target=predicted_label_idx)
+    attributions_ig_nt = noise_tunnel.attribute(input, nt_samples=4, nt_type='smoothgrad_sq', target=predicted_label_idx)
     _ = viz.visualize_image_attr_multiple(np.transpose(attributions_ig_nt.squeeze().cpu().detach().numpy(), (1,2,0)),
                                         np.transpose(image.squeeze().cpu().detach().numpy(), (1,2,0)),
                                         ["original_image", "heat_map"],
-                                        ["all", "positive"],
+                                        ["all", "absolute_value"],
+                                        titles=["Original Image", "Attributions with IG and Noise Tunnel"],
                                         cmap=default_cmap,
                                         show_colorbar=True)
+    
+    # positive values point to pixels that increase the prediction score, negative attributions point to pixels that decrease the score
+    # absolute attribution value show the magnitude of the effect regardless of direction
 if __name__ == "__main__":
     visualize_model_prediction()
