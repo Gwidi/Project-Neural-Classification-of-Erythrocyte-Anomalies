@@ -23,7 +23,7 @@ def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batc
         transforms.RandomVerticalFlip(p=0.5),
         transforms.ColorJitter(brightness=0.2, contrast=0.2),  # Slight brightness and contrast changes
         transforms.Resize((256, 256)),
-        transforms.CenterCrop((224, 224))
+        transforms.CenterCrop((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
@@ -39,7 +39,7 @@ def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batc
 
     generator = torch.Generator().manual_seed(42)
 
-    train_dataset, val_dataset, test_dataset = random_split(
+    train_dataset, val_dataset = random_split(
         trainval_dataset, [0.8, 0.2], generator=generator)
     
     train_dataset.dataset.transform = train_transform
@@ -86,7 +86,7 @@ def main():
         mode='min',                   # 'min' (loss), 'max' (accuracy)
     )
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
-    trainer = L.Trainer(max_epochs=10, accelerator='gpu', logger=wandb_logger, callbacks=[checkpoint_callback, lr_monitor])
+    trainer = L.Trainer(max_epochs=100, accelerator='gpu', logger=wandb_logger, callbacks=[checkpoint_callback, lr_monitor])
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
     best_model_path = checkpoint_callback.best_model_path
     best_model = LitResNet.load_from_checkpoint(best_model_path, model=resnet18)
