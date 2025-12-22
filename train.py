@@ -29,7 +29,6 @@ def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batc
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     val_transform = transforms.Compose([
-        AutoCrop(threshold=5),
         transforms.Resize((256, 256)),
         transforms.CenterCrop((224, 224)),
         transforms.ToTensor(),
