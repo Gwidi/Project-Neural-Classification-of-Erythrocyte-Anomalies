@@ -19,9 +19,8 @@ The `train` set consist of approximately 22,000 labeled images:
   </figure>
 </p>
 
-## Design choices
-### A. Data preprocessing & augmentation
-The pipeline uses transforms.Compose and consist of following methods:
-1. Resize to scale image into 256x256 resolution 
-2. ToTensor 
-3. Normalize with `mean=[0.485, 0.456, 0.406]` and `std=[0.229, 0.224, 0.225]`- in this project pretrained ResNet-18 will be used. Pretrained models expect inputs to follow the same statistical distribution they were trained on.
+## 📊 Detailed Report
+For complete documentation including model architecture, training details, hyperparameters, results, and visualizations, please refer to [REPORT.md](REPORT.md).
+
+
+
