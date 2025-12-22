@@ -22,12 +22,14 @@ def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batc
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomVerticalFlip(p=0.5),
         transforms.ColorJitter(brightness=0.2, contrast=0.2),  # Slight brightness and contrast changes
-        transforms.Resize((224, 224)),
+        transforms.Resize((256, 256)),
+        transforms.CenterCrop((224, 224))
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     val_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
+        transforms.Resize((256, 256)),
+        transforms.CenterCrop((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
@@ -35,32 +37,24 @@ def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batc
     # Load the malaria dataset
     trainval_dataset = MalariaDataset(split='trainval', transform=None)
 
-    # 1. Split train dataset into train validation and test sets
-    total_size = len(trainval_dataset)
-    train_size = int(0.7 * total_size)
-    val_size = int(0.15 * total_size)
-    test_size = total_size - train_size - val_size
-
     generator = torch.Generator().manual_seed(42)
 
     train_dataset, val_dataset, test_dataset = random_split(
-        trainval_dataset, [train_size, val_size, test_size], generator=generator)
+        trainval_dataset, [0.8, 0.2], generator=generator)
     
     train_dataset.dataset.transform = train_transform
     val_dataset.dataset.transform = val_transform
-    test_dataset.dataset.transform = val_transform
 
     # 2. Create data loaders
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers)
 
-    return train_dataloader, val_dataloader, test_dataloader
+    return train_dataloader, val_dataloader
 
 
 
 def main():
-    train_loader, val_loader, test_loader = get_dataloaders()
+    train_loader, val_loader = get_dataloaders()
     # Load ResNet-18 model
     resnet18 = models.resnet18(weights="IMAGENET1K_V1")
     # Freeze all the layers except the final layer
@@ -94,7 +88,6 @@ def main():
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
     trainer = L.Trainer(max_epochs=10, accelerator='gpu', logger=wandb_logger, callbacks=[checkpoint_callback, lr_monitor])
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
-    trainer.test(model, test_loader)
     best_model_path = checkpoint_callback.best_model_path
     best_model = LitResNet.load_from_checkpoint(best_model_path, model=resnet18)
     # Save the entire model
