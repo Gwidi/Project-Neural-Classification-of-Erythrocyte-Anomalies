@@ -14,7 +14,6 @@ from auto_crop import AutoCrop
 def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batch_size: int = 32, num_workers: int = 4):   
     # Define transformations
     train_transform = transforms.Compose([
-        AutoCrop(threshold=5),
         transforms.RandomChoice([
             transforms.RandomRotation((0, 0)),      # 0 degrees
             transforms.RandomRotation((90, 90)),    # 90 degrees
@@ -24,13 +23,15 @@ def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batc
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomVerticalFlip(p=0.5),
         transforms.ColorJitter(brightness=0.2, contrast=0.2),  # Slight brightness and contrast changes
-        transforms.Resize((224, 224)),
+        transforms.Resize((256, 256)),
+        transforms.CenterCrop((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     val_transform = transforms.Compose([
         AutoCrop(threshold=5),
-        transforms.Resize((224, 224)),
+        transforms.Resize((256, 256)),
+        transforms.CenterCrop((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
