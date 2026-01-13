@@ -72,7 +72,7 @@ def main():
 
 
     # Initialize the model and trainer
-    model = LitResNet(resnet18)
+    model = LitResNet(resnet18, learning_rate=1e-3, unfreeze_epoch=5, unfreeze_layers=1)
 
     # Exercise 2 Train the model and verify its performance on the test set.
     experiment_name = "resnet18_transfer_learning"
