@@ -11,7 +11,40 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.callbacks import LearningRateMonitor
 from auto_crop import AutoCrop
 
-def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batch_size: int = 32, num_workers: int = 4):   
+class MixupCutmix: 
+    def __init__(self, mixup_alpha=0.4, cutmix_alpha=1.0, prob=0.5):
+        self.mixup_alpha = mixup_alpha
+        self. cutmix_alpha = cutmix_alpha
+        self. prob = prob
+    
+    def __call__(self, images, labels):
+        if torch.rand(1) > self.prob:
+            return images, labels, labels, 1.0
+        
+        batch_size = images. size(0)
+        indices = torch.randperm(batch_size)
+        
+        if torch.rand(1) > 0.5:
+            # Mixup
+            lam = torch.distributions.Beta(self. mixup_alpha, self.mixup_alpha).sample()
+            images = lam * images + (1 - lam) * images[indices]
+        else:
+            # CutMix
+            lam = torch.distributions.Beta(self.cutmix_alpha, self. cutmix_alpha).sample()
+            _, _, H, W = images. shape
+            cut_ratio = torch.sqrt(1 - lam)
+            cut_h, cut_w = int(H * cut_ratio), int(W * cut_ratio)
+            cx, cy = torch.randint(W, (1,)), torch.randint(H, (1,))
+            x1 = torch.clamp(cx - cut_w // 2, 0, W)
+            x2 = torch. clamp(cx + cut_w // 2, 0, W)
+            y1 = torch. clamp(cy - cut_h // 2, 0, H)
+            y2 = torch. clamp(cy + cut_h // 2, 0, H)
+            images[:, :, y1:y2, x1:x2] = images[indices, :, y1:y2, x1:x2]
+            lam = 1 - ((x2 - x1) * (y2 - y1) / (H * W))
+        
+        return images, labels, labels[indices], lam. item()
+
+def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batch_size: int = 128, num_workers: int = 32):   
     # Define transformations
     train_transform = transforms.Compose([
         transforms.RandomChoice([
@@ -22,11 +55,12 @@ def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batc
         ]),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomVerticalFlip(p=0.5),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2),  # Slight brightness and contrast changes
+        transforms.ColorJitter(brightness=0.2, contrast=0.3, saturation=0.3, hue=0.1),  # Slight brightness and contrast changes
         transforms.Resize((256, 256)),
         transforms.CenterCrop((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+	transforms.RandomErasing(p=0.25, scale=(0.02, 0.15))
     ])
     val_transform = transforms.Compose([
         transforms.Resize((256, 256)),
@@ -57,22 +91,23 @@ def get_dataloaders(root='/home/gwidon/Documents/ZPO/data/malaria_dataset', batc
 def main():
     train_loader, val_loader = get_dataloaders()
     # Load ResNet-18 model
-    resnet18 = models.resnet18(weights="IMAGENET1K_V1")
+    resnet50 = models.resnet50(weights="IMAGENET1K_V2")
     # Freeze all the layers except the final layer
-    for param in resnet18.parameters():
+    for param in resnet50.parameters():
         param.requires_grad = False
     num_classes = 2
-    num_ftrs = resnet18.fc.in_features
-    resnet18.fc = nn.Sequential(
-    nn.Linear(num_ftrs, 128),      # Step 1: reduce features to 128
+    num_ftrs = resnet50.fc.in_features
+    resnet50.fc = nn.Sequential(
+    nn.Linear(num_ftrs, 256),      # Step 1: reduce features to 128
     nn.ReLU(),                     # Step 2: Activation function (adds non-linearity)
     nn.Dropout(0.5),               # Step 3: Randomly drop 50% of neurons (prevents overfitting)
-    nn.Linear(128, num_classes)    # Step 4: Final output - 1 number (will decide 0 or 1)
+    nn.Linear(256, num_classes)    # Step 4: Final output - 1 number (will decide 0 or 1)
 )
-
+    # Mixup/CutMix
+    mixup_cutmix = MixupCutmix(mixup_alpha=0.4, cutmix_alpha=1.0, prob=0.5)
 
     # Initialize the model and trainer
-    model = LitResNet(resnet18, learning_rate=1e-3, unfreeze_epoch=5, unfreeze_layers=1)
+    model = LitResNet(resnet50, learning_rate=1e-3, unfreeze_epoch=5, unfreeze_layers=1, mixup_fn=mixup_cutmix)
 
     # Exercise 2 Train the model and verify its performance on the test set.
     experiment_name = "resnet18_transfer_learning"
@@ -90,7 +125,7 @@ def main():
     trainer = L.Trainer(max_epochs=100, accelerator='gpu', logger=wandb_logger, callbacks=[checkpoint_callback, lr_monitor])
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
     best_model_path = checkpoint_callback.best_model_path
-    best_model = LitResNet.load_from_checkpoint(best_model_path, model=resnet18)
+    best_model = LitResNet.load_from_checkpoint(best_model_path, model=resnet50)
     # Save the entire model
     torch.save(best_model.model, 'models/best.pt')
 

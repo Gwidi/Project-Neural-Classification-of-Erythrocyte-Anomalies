@@ -10,15 +10,13 @@ import torchmetrics
 from torchmetrics import MetricCollection
 
 class LitResNet(L.LightningModule):
-    def __init__(self, model, learning_rate: float = 1e-3, unfreeze_epoch: int = 5, unfreeze_layers: int = 1):
+    def __init__(self, model, learning_rate: float = 1e-3, unfreeze_epoch: int = 5, unfreeze_layers: int = 1, mixup_fn = None):
         super().__init__()
-        self.save_hyperparameters(ignore=['model'])
+        self.save_hyperparameters(ignore=['model','mixup_fn'])
         
         # Use pre-trained ResNet18 model
         self.model = model
-        
-        self.loss = nn.CrossEntropyLoss()
-
+        self.loss = nn.CrossEntropyLoss(label_smoothing=0.1)
         # Select layers to unfreeze
         self.resnet_layers = [
             self.model.layer4,
@@ -30,6 +28,7 @@ class LitResNet(L.LightningModule):
         self.unfreeze_epoch = unfreeze_epoch
         self.unfreeze_layers = unfreeze_layers
         self.unfrozen_count = 0
+        self.mixup_fn = mixup_fn
 
         self.metrics = MetricCollection([
             torchmetrics.Accuracy(task="binary"),
@@ -62,14 +61,21 @@ class LitResNet(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self.model(x)
-        loss = self.loss(y_hat, y)
+        if self.mixup_fn is not None and self.training:
+            x, y1, y2, lam = self.mixup_fn(x, y)
+            y_hat = self.model(x)
+            # Mixup loss - średnia ważona dwóch klas
+            loss = lam * self.loss(y_hat, y1) + (1 - lam) * self.loss(y_hat, y2)
+        else:
+            y_hat = self. model(x)
+            loss = self. loss(y_hat, y)
         self.log('train_loss', loss, on_step=False, on_epoch=True, prog_bar=False)
 
         # convert logits to predicted class indices for metrics
         preds = torch.argmax(y_hat, dim=1)
 
-        self.train_metrics.update(preds, y)
+        #self.train_metrics.update(preds, y)
+        self.train_metrics. update(preds, y if self.mixup_fn is None else y1)
         self.log_dict(self.train_metrics, on_step=False, on_epoch=True, prog_bar=True)
 
         return loss
@@ -107,10 +113,10 @@ class LitResNet(L.LightningModule):
         for i, layer in enumerate(self.resnet_layers):
             param_groups.append({
                 'params':  layer.parameters(),
-                'lr': self.hparams. learning_rate / (10 ** (i + 1))  # Coraz mniejszy LR
+                'lr': self.hparams. learning_rate / (2 ** (i + 1))  # Coraz mniejszy LR
             })
-        optimizer = optim.AdamW(param_groups)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
+        optimizer = optim.AdamW(param_groups, weight_decay=0.01)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=7, min_lr=1e-6)
         return {
         "optimizer": optimizer,
         "lr_scheduler": {
